@@ -41,7 +41,7 @@ func (s *SqlQueryService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	var req QueryRequest
 	if err := decoder.Decode(&req); err != nil {
-		respond(w, http.StatusBadRequest, NewFailedResponse(err))
+		respond(w, http.StatusUnprocessableEntity, NewFailedResponse(BadPayloadError{Err: err}))
 		return
 	}
 
@@ -113,7 +113,7 @@ type QueryResponse struct {
 }
 
 type BadPayloadError struct {
-	Message string
+	Err error
 }
 
 func NewSuccessResponse(data *sqlrunner.QueryResult) QueryResponse {
@@ -143,11 +143,11 @@ func NewFailedResponse(err error) QueryResponse {
 }
 
 func NewBadPayloadError(message string) BadPayloadError {
-	return BadPayloadError{Message: message}
+	return BadPayloadError{Err: errors.New(message)}
 }
 
 func (e BadPayloadError) Error() string {
-	return "Bad Payload: " + e.Message
+	return "Bad Payload: " + e.Err.Error()
 }
 
 func respond(w http.ResponseWriter, status int, data any) {
