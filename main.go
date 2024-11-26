@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -40,23 +41,23 @@ func (s *SqlQueryService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	var req QueryRequest
 	if err := decoder.Decode(&req); err != nil {
-		respond(w, http.StatusBadRequest, NewFailedResponse(err.Error()))
+		respond(w, http.StatusBadRequest, NewFailedResponse(err))
 		return
 	}
 
 	if req.Schema == "" {
-		respond(w, http.StatusUnprocessableEntity, NewFailedResponse("Schema is required"))
+		respond(w, http.StatusUnprocessableEntity, NewFailedResponse(NewBadPayloadError("Schema is required")))
 		return
 	}
 
 	if req.Query == "" {
-		respond(w, http.StatusUnprocessableEntity, NewFailedResponse("Query is required"))
+		respond(w, http.StatusUnprocessableEntity, NewFailedResponse(NewBadPayloadError("Query is required")))
 		return
 	}
 
 	runner, err := s.findRunner(req.Schema)
 	if err != nil {
-		respond(w, http.StatusInternalServerError, NewFailedResponse(err.Error()))
+		respond(w, http.StatusInternalServerError, NewFailedResponse(err))
 		return
 	}
 
@@ -65,7 +66,7 @@ func (s *SqlQueryService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	result, err := runner.Query(queryCtx, req.Query)
 	if err != nil {
-		respond(w, http.StatusBadRequest, NewFailedResponse(err.Error()))
+		respond(w, http.StatusBadRequest, NewFailedResponse(err))
 		return
 	}
 
@@ -108,6 +109,11 @@ type QueryResponse struct {
 
 	Data    *sqlrunner.QueryResult `json:"data,omitempty"`    // success = true
 	Message *string                `json:"message,omitempty"` // success = false
+	Code    *string                `json:"code,omitempty"`    // success = false
+}
+
+type BadPayloadError struct {
+	Message string
 }
 
 func NewSuccessResponse(data *sqlrunner.QueryResult) QueryResponse {
@@ -117,11 +123,31 @@ func NewSuccessResponse(data *sqlrunner.QueryResult) QueryResponse {
 	}
 }
 
-func NewFailedResponse(message string) QueryResponse {
+func NewFailedResponse(err error) QueryResponse {
+	code := "INTERNAL_ERROR"
+	if errors.As(err, &BadPayloadError{}) {
+		code = "BAD_PAYLOAD"
+	} else if errors.As(err, &sqlrunner.SchemaError{}) {
+		code = "SCHEMA_ERROR"
+	} else if errors.As(err, &sqlrunner.QueryError{}) {
+		code = "QUERY_ERROR"
+	}
+
+	message := err.Error()
+
 	return QueryResponse{
 		Success: false,
 		Message: &message,
+		Code:    &code,
 	}
+}
+
+func NewBadPayloadError(message string) BadPayloadError {
+	return BadPayloadError{Message: message}
+}
+
+func (e BadPayloadError) Error() string {
+	return "Bad Payload: " + e.Message
 }
 
 func respond(w http.ResponseWriter, status int, data any) {
