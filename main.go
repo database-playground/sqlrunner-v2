@@ -37,32 +37,26 @@ type SqlQueryService struct {
 }
 
 func (s *SqlQueryService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	encoder := json.NewEncoder(w)
-
 	decoder := json.NewDecoder(r.Body)
 	var req QueryRequest
 	if err := decoder.Decode(&req); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = encoder.Encode(NewFailedResponse(err.Error()))
+		respond(w, http.StatusBadRequest, NewFailedResponse(err.Error()))
 		return
 	}
 
 	if req.Schema == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = encoder.Encode(NewFailedResponse("Schema is required"))
+		respond(w, http.StatusUnprocessableEntity, NewFailedResponse("Schema is required"))
 		return
 	}
 
 	if req.Query == "" {
-		w.WriteHeader(http.StatusBadRequest)
-		_ = encoder.Encode(NewFailedResponse("Query is required"))
+		respond(w, http.StatusUnprocessableEntity, NewFailedResponse("Query is required"))
 		return
 	}
 
 	runner, err := s.findRunner(req.Schema)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		_ = encoder.Encode(NewFailedResponse(err.Error()))
+		respond(w, http.StatusInternalServerError, NewFailedResponse(err.Error()))
 		return
 	}
 
@@ -71,13 +65,11 @@ func (s *SqlQueryService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	result, err := runner.Query(queryCtx, req.Query)
 	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		_ = encoder.Encode(NewFailedResponse(err.Error()))
+		respond(w, http.StatusBadRequest, NewFailedResponse(err.Error()))
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
-	_ = encoder.Encode(NewSuccessResponse(result))
+	respond(w, http.StatusOK, NewSuccessResponse(result))
 }
 
 func (s *SqlQueryService) findRunner(schema string) (*sqlrunner.SQLRunner, error) {
@@ -130,4 +122,10 @@ func NewFailedResponse(message string) QueryResponse {
 		Success: false,
 		Message: &message,
 	}
+}
+
+func respond(w http.ResponseWriter, status int, data any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(data)
 }
