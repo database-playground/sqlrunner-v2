@@ -1,6 +1,10 @@
 # SQLite Query Runner
 
-A component of Database Playground (v2). Rewrite from <https://github.com/database-playground/app-sf>.
+A query runner that exposes an HTTP API for executing queries on a schema using SQLite. It supports several MySQL extensions, including `LEFT`, `IF`, `YEAR`, `MONTH`, and `DAY`. Caching, timeout management, and error handling are also implemented with care.
+
+Please note that this HTTP API lacks any form of authentication. It is not advisable to expose it to the Internet to prevent abuse.
+
+This component is part of Database Playground (v2) and is based on the work at <https://github.com/database-playground/app-sf>.
 
 ## Usage
 
