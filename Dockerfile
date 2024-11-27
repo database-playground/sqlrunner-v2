@@ -1,4 +1,4 @@
-FROM docker.io/library/golang:1.23.3-alpine AS builder
+FROM docker.io/library/golang:1-alpine AS builder
 RUN mkdir /src
 WORKDIR /src
 
