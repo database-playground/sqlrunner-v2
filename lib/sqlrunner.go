@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -210,6 +211,9 @@ func (r *SQLRunner) Query(ctx context.Context, query string) (*QueryResult, erro
 // You should close the database after using it.
 func (r *SQLRunner) getSqliteInstance() (*sql.DB, error) {
 	filename, err := initializeThreadSafe(r.schema)
+	if errors.As(err, &SchemaError{}) {
+		return nil, err
+	}
 	if err != nil {
 		return nil, NewSchemaError(err)
 	}
@@ -256,7 +260,7 @@ func initialize(schema string) (filename string, err error) {
 	}
 
 	if _, err := drv.Exec(schema); err != nil {
-		return "", fmt.Errorf("create schema: %w", err)
+		return "", NewSchemaError(err)
 	}
 
 	if err := drv.Close(); err != nil {
