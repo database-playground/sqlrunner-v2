@@ -254,6 +254,11 @@ func initialize(schema string) (filename string, err error) {
 	if err != nil {
 		return "", fmt.Errorf("open sqlite: %w", err)
 	}
+	defer func() {
+		if err := drv.Close(); err != nil {
+			slog.Warn("close sqlite", slog.Any("error", err))
+		}
+	}()
 
 	if _, err := drv.Exec("PRAGMA foreign_keys = ON;"); err != nil {
 		return "", fmt.Errorf("enable foreign keys: %w", err)
@@ -261,10 +266,6 @@ func initialize(schema string) (filename string, err error) {
 
 	if _, err := drv.Exec(schema); err != nil {
 		return "", NewSchemaError(err)
-	}
-
-	if err := drv.Close(); err != nil {
-		return "", fmt.Errorf("close sqlite: %w", err)
 	}
 
 	// Rename the file to the final name
