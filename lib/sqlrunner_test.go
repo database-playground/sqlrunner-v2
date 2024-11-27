@@ -290,7 +290,6 @@ func BenchmarkDbrunner(b *testing.B) {
 			require.NoError(b, err)
 
 			_, _ = runner.Query(context.TODO(), "SELECT value FROM benchtest")
-			_ = runner.Close()
 		}
 	})
 
@@ -309,7 +308,6 @@ func BenchmarkDbrunner(b *testing.B) {
 			require.NoError(b, err)
 
 			_, _ = runner.Query(context.TODO(), "SELECT value FROM benchtest")
-			_ = runner.Close()
 		}
 	})
 }
