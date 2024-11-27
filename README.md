@@ -10,11 +10,20 @@ This component is part of Database Playground.
 
 ### Starting the service
 
+For development:
+
 ```bash
 go run .
 ```
 
-For production: Zeabur builds and runs it automatically.
+For production in a Docker container:
+
+```bash
+docker run -p 8080:8080 ghcr.io/database-playground/sqlrunner-v2
+```
+
+You can also specify the image tag `main`, which points to the latest commit
+in the main branch.
 
 ### API usage
 
