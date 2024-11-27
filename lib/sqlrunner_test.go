@@ -222,6 +222,24 @@ func TestDbRunnerQueryTimeout(t *testing.T) {
 	assert.Equal(t, context.DeadlineExceeded, queryError.Parent)
 }
 
+func TestDbRunnerReadonly(t *testing.T) {
+	t.Parallel()
+
+	runner, err := sqlrunner.NewSQLRunner(`
+		CREATE TABLE readonlytest (
+			value TEXT
+		);
+
+		INSERT INTO readonlytest (value) VALUES ('hello');
+		INSERT INTO readonlytest (value) VALUES ('world');
+	`)
+	require.NoError(t, err)
+
+	_, err = runner.Query(context.TODO(), "INSERT INTO readonlytest (value) VALUES ('test')")
+	t.Log(err)
+	require.ErrorAs(t, err, &sqlrunner.QueryError{})
+}
+
 func BenchmarkDbrunner(b *testing.B) {
 	b.ReportAllocs()
 
