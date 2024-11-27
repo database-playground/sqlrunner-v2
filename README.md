@@ -4,7 +4,7 @@ A query runner that exposes an HTTP API for executing queries on a schema using 
 
 Please note that this HTTP API lacks any form of authentication. It is not advisable to expose it to the Internet to prevent abuse.
 
-This component is part of Database Playground (v2) and is based on the work at <https://github.com/database-playground/app-sf>.
+This component is part of Database Playground.
 
 ## Usage
 
