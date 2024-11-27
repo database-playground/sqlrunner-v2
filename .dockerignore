@@ -1,0 +1,17 @@
+# Devenv
+.devenv*
+devenv.local.nix
+devenv*
+
+# direnv
+.direnv
+.envrc
+
+# pre-commit
+.pre-commit-config.yaml
+
+# zeabur
+zbpack.json
+
+# github
+.github/

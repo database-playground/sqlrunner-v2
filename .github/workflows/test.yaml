@@ -1,0 +1,23 @@
+name: Go test
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+      - name: Install devenv.sh
+        run: nix profile install nixpkgs#devenv
+
+      - uses: actions/checkout@v4
+
+      - name: Run go test
+        run: devenv shell go test ./...
