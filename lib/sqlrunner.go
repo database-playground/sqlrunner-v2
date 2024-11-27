@@ -9,15 +9,18 @@ import (
 	"database/sql/driver"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
-	"sync"
 	"time"
 
 	lru "github.com/hashicorp/golang-lru/v2"
+	"golang.org/x/sync/singleflight"
 	"modernc.org/sqlite"
 	_ "modernc.org/sqlite"
 )
+
+var sf singleflight.Group
 
 func init() {
 	// MySQL-compatible functions
@@ -117,8 +120,7 @@ type SQLRunner struct {
 	cache *lru.Cache[string, *QueryResult]
 
 	// cache
-	db *sql.DB
-	mu sync.Mutex
+	filename string
 }
 
 func NewSQLRunner(schema string) (*SQLRunner, error) {
@@ -144,21 +146,6 @@ func NewSQLRunner(schema string) (*SQLRunner, error) {
 	return runner, nil
 }
 
-// Close closes the SQLite instance.
-func (r *SQLRunner) Close() error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	if r.db == nil {
-		return nil
-	}
-
-	err := r.db.Close()
-	r.db = nil
-
-	return err
-}
-
 // Query executes a query and returns the result.
 func (r *SQLRunner) Query(ctx context.Context, query string) (*QueryResult, error) {
 	// Check the cache first
@@ -170,13 +157,20 @@ func (r *SQLRunner) Query(ctx context.Context, query string) (*QueryResult, erro
 	if err != nil {
 		return nil, fmt.Errorf("get schema: %w", err)
 	}
+	defer func() {
+		if err := db.Close(); err != nil {
+			slog.WarnContext(ctx, "close schema database", slog.Any("error", err))
+		}
+	}()
 
 	result, err := db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, NewQueryError(err)
 	}
 	defer func() {
-		_ = result.Close()
+		if err := result.Close(); err != nil {
+			slog.WarnContext(ctx, "close result", slog.Any("error", err))
+		}
 	}()
 
 	cols, err := result.Columns()
@@ -216,28 +210,36 @@ func (r *SQLRunner) Query(ctx context.Context, query string) (*QueryResult, erro
 
 // getSqliteInstance gets the initialized SQLite instance.
 //
-// You don't need to close it after using this instance.
+// You should close the database after using it.
 func (r *SQLRunner) getSqliteInstance() (*sql.DB, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+	if r.filename != "" {
+		filename, err := initializeThreadSafe(r.schema)
+		if err != nil {
+			return nil, NewSchemaError(err)
+		}
 
-	if r.db != nil {
-		return r.db, nil
+		r.filename = filename
 	}
 
-	filename, err := initialize(r.schema)
-	if err != nil {
-		return nil, NewSchemaError(err)
-	}
-
-	db, err := sql.Open("sqlite", fmt.Sprintf("file:%s?mode=ro", filename))
+	db, err := sql.Open("sqlite", fmt.Sprintf("file:%s?mode=ro", r.filename))
 	if err != nil {
 		return nil, fmt.Errorf("open schema database (r/o): %w", err)
 	}
 
-	r.db = db
-
 	return db, nil
+}
+
+// initializeThreadSafe creates a new SQLite database and sets up the schema.
+// It is thread safe which ensures that the schema is only initialized once.
+func initializeThreadSafe(schema string) (filename string, err error) {
+	filenameAny, err, _ := sf.Do(schema, func() (interface{}, error) {
+		return initialize(schema)
+	})
+	if err != nil {
+		return "", err
+	}
+
+	return filenameAny.(string), nil
 }
 
 // initialize creates a new SQLite database and sets up the schema.
