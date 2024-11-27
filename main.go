@@ -30,6 +30,11 @@ func main() {
 	service := &SqlQueryService{
 		runnersCache: runnersCache,
 	}
+	http.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("OK"))
+	})
+
 	http.Handle("POST /query", service)
 
 	slog.Info("Listening", slog.String("addr", addr))
