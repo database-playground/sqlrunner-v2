@@ -258,6 +258,8 @@ func initialize(schema string) (filename string, err error) {
 		if err := drv.Close(); err != nil {
 			slog.Warn("close sqlite", slog.Any("error", err))
 		}
+
+		_ = os.Remove(schemaFilename + ".tmp")
 	}()
 
 	if _, err := drv.Exec("PRAGMA foreign_keys = ON;"); err != nil {
