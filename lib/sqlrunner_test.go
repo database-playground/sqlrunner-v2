@@ -240,6 +240,29 @@ func TestDbRunnerReadonly(t *testing.T) {
 	require.ErrorAs(t, err, &sqlrunner.QueryError{})
 }
 
+func TestDbRunnerNoScientificNotation(t *testing.T) {
+	t.Parallel()
+
+	runner, err := sqlrunner.NewSQLRunner(`
+		CREATE TABLE notationtest (
+			value REAL
+		);
+
+		INSERT INTO notationtest (value) VALUES (1.0);
+		INSERT INTO notationtest (value) VALUES (1145141919.810)
+	`)
+
+	require.NoError(t, err)
+
+	result, err := runner.Query(context.TODO(), "SELECT value FROM notationtest")
+	require.NoError(t, err)
+
+	assert.Len(t, result.Rows, 2)
+	assert.Equal(t, []string{"value"}, result.Columns)
+	assert.Equal(t, "1", result.Rows[0][0])
+	assert.Equal(t, "1145141919.81", result.Rows[1][0])
+}
+
 func BenchmarkDbrunner(b *testing.B) {
 	b.ReportAllocs()
 
