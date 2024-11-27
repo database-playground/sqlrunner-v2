@@ -20,7 +20,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-var sf singleflight.Group
+var sf = &singleflight.Group{}
 
 func init() {
 	// MySQL-compatible functions
@@ -118,9 +118,6 @@ type SQLRunner struct {
 	schema string
 
 	cache *lru.Cache[string, *QueryResult]
-
-	// cache
-	filename string
 }
 
 func NewSQLRunner(schema string) (*SQLRunner, error) {
@@ -212,16 +209,12 @@ func (r *SQLRunner) Query(ctx context.Context, query string) (*QueryResult, erro
 //
 // You should close the database after using it.
 func (r *SQLRunner) getSqliteInstance() (*sql.DB, error) {
-	if r.filename != "" {
-		filename, err := initializeThreadSafe(r.schema)
-		if err != nil {
-			return nil, NewSchemaError(err)
-		}
-
-		r.filename = filename
+	filename, err := initializeThreadSafe(r.schema)
+	if err != nil {
+		return nil, NewSchemaError(err)
 	}
 
-	db, err := sql.Open("sqlite", fmt.Sprintf("file:%s?mode=ro", r.filename))
+	db, err := sql.Open("sqlite", fmt.Sprintf("file:%s?mode=ro", filename))
 	if err != nil {
 		return nil, fmt.Errorf("open schema database (r/o): %w", err)
 	}
