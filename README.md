@@ -78,6 +78,19 @@ To distinguish between a "query error" and a "schema error," you can check the `
 - `BAD_PAYLOAD`: The payload is invalid (see message for details).
 - `INTERNAL_ERROR`: Other errors.
 
+### Health Check
+
+Call `GET /healthz` endpoint to check the health of the service.
+
+```bash
+curl --request GET \
+  --url http://api-endpoint:8080/healthz
+```
+
+```plain
+OK
+```
+
 ## License
 
 Apache-2.0. See [LICENSE](LICENSE) for details.
