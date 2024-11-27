@@ -36,10 +36,10 @@ curl --request POST \
 {
   "success": true,
   "data": {
-    "Columns": [
+    "columns": [
       "ID"
     ],
-    "Rows": [
+    "rows": [
       [
         "1"
       ]
@@ -53,7 +53,7 @@ If there is an error, it will return an error message.
 ```json
 {
   "success": false,
-  "message": "query error: SQL logic error: no such table: de1v (1)",
+  "message": "SQL logic error: near \"%\": syntax error (1)",
   "code": "QUERY_ERROR"
 }
 ```
