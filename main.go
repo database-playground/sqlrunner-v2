@@ -41,7 +41,7 @@ func (s *SqlQueryService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	var req QueryRequest
 	if err := decoder.Decode(&req); err != nil {
-		respond(w, http.StatusUnprocessableEntity, NewFailedResponse(BadPayloadError{Err: err}))
+		respond(w, http.StatusUnprocessableEntity, NewFailedResponse(BadPayloadError{Parent: err}))
 		return
 	}
 
@@ -113,7 +113,7 @@ type QueryResponse struct {
 }
 
 type BadPayloadError struct {
-	Err error
+	Parent error
 }
 
 func NewSuccessResponse(data *sqlrunner.QueryResult) QueryResponse {
@@ -124,16 +124,26 @@ func NewSuccessResponse(data *sqlrunner.QueryResult) QueryResponse {
 }
 
 func NewFailedResponse(err error) QueryResponse {
-	code := "INTERNAL_ERROR"
-	if errors.As(err, &BadPayloadError{}) {
-		code = "BAD_PAYLOAD"
-	} else if errors.As(err, &sqlrunner.SchemaError{}) {
-		code = "SCHEMA_ERROR"
-	} else if errors.As(err, &sqlrunner.QueryError{}) {
-		code = "QUERY_ERROR"
-	}
+	var badPayloadError BadPayloadError
+	var schemaError sqlrunner.SchemaError
+	var queryError sqlrunner.QueryError
 
-	message := err.Error()
+	var code string
+	var message string
+
+	if errors.As(err, &badPayloadError) {
+		code = "BAD_PAYLOAD"
+		message = badPayloadError.Parent.Error()
+	} else if errors.As(err, &schemaError) {
+		code = "SCHEMA_ERROR"
+		message = schemaError.Parent.Error()
+	} else if errors.As(err, &queryError) {
+		code = "QUERY_ERROR"
+		message = queryError.Parent.Error()
+	} else {
+		code = "INTERNAL_ERROR"
+		message = err.Error()
+	}
 
 	return QueryResponse{
 		Success: false,
@@ -143,11 +153,11 @@ func NewFailedResponse(err error) QueryResponse {
 }
 
 func NewBadPayloadError(message string) BadPayloadError {
-	return BadPayloadError{Err: errors.New(message)}
+	return BadPayloadError{Parent: errors.New(message)}
 }
 
 func (e BadPayloadError) Error() string {
-	return "Bad Payload: " + e.Err.Error()
+	return "bad payload: " + e.Parent.Error()
 }
 
 func respond(w http.ResponseWriter, status int, data any) {
