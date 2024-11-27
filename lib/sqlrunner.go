@@ -175,6 +175,9 @@ func (r *SQLRunner) Query(ctx context.Context, query string) (*QueryResult, erro
 	if err != nil {
 		return nil, NewQueryError(err)
 	}
+	defer func() {
+		_ = result.Close()
+	}()
 
 	cols, err := result.Columns()
 	if err != nil {
