@@ -1,5 +1,5 @@
 // Package sqlrunner provides a wrapper of SQLite that implements the
-// cache, timed out, and MySQL-compatible functions.
+// cache, timeout, and MySQL-compatible functions.
 package sqlrunner
 
 import (
