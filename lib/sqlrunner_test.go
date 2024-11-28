@@ -263,6 +263,26 @@ func TestDbRunnerNoScientificNotation(t *testing.T) {
 	assert.Equal(t, "1145141919.81", result.Rows[1][0])
 }
 
+func TestDbRunnerEmptyQuery(t *testing.T) {
+	t.Parallel()
+
+	runner, err := sqlrunner.NewSQLRunner(`
+		CREATE TABLE emptytest (
+			value TEXT
+		);
+
+		INSERT INTO emptytest (value) VALUES ('hello');
+		INSERT INTO emptytest (value) VALUES ('world');
+	`)
+	require.NoError(t, err)
+
+	result, err := runner.Query(context.TODO(), "")
+	require.NoError(t, err)
+
+	assert.Len(t, result.Rows, 0)
+	assert.Len(t, result.Columns, 0)
+}
+
 func BenchmarkDbrunner(b *testing.B) {
 	b.ReportAllocs()
 
