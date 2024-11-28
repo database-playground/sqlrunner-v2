@@ -11,7 +11,6 @@ import (
 	"time"
 
 	sqlrunner "github.com/database-playground/sqlrunner/lib"
-	lru "github.com/hashicorp/golang-lru/v2"
 	"golang.org/x/sync/singleflight"
 )
 
@@ -21,15 +20,7 @@ func main() {
 		addr = ":" + os.Getenv("PORT")
 	}
 
-	runnersCache, err := lru.New[string, *sqlrunner.SQLRunner](20)
-	if err != nil {
-		slog.Error("failed to create LRU cache for runners", slog.Any("error", err))
-		os.Exit(1)
-	}
-
-	service := &SqlQueryService{
-		runnersCache: runnersCache,
-	}
+	service := &SqlQueryService{}
 	http.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("OK"))
@@ -45,8 +36,7 @@ func main() {
 }
 
 type SqlQueryService struct {
-	runnersCache *lru.Cache[string, *sqlrunner.SQLRunner]
-	sfgroup      singleflight.Group
+	sfgroup singleflight.Group
 }
 
 func (s *SqlQueryService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -86,19 +76,12 @@ func (s *SqlQueryService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *SqlQueryService) findRunner(schema string) (*sqlrunner.SQLRunner, error) {
-	// If we have already prepared a runner for this schema, return it.
-	runner, ok := s.runnersCache.Get(schema)
-	if ok {
-		return runner, nil
-	}
-
 	result, err, _ := s.sfgroup.Do(schema, func() (any, error) {
 		newRunner, err := sqlrunner.NewSQLRunner(schema)
 		if err != nil {
 			return nil, fmt.Errorf("create SQLRunner: %w", err)
 		}
 
-		s.runnersCache.Add(schema, newRunner)
 		return newRunner, nil
 	})
 	if err != nil {
