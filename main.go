@@ -47,13 +47,8 @@ func (s *SqlQueryService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Schema == "" {
-		respond(w, http.StatusUnprocessableEntity, NewFailedResponse(NewBadPayloadError("Schema is required")))
-		return
-	}
-
-	if req.Query == "" {
-		respond(w, http.StatusUnprocessableEntity, NewFailedResponse(NewBadPayloadError("Query is required")))
+	if req.Schema == "" || req.Query == "" {
+		respond(w, http.StatusUnprocessableEntity, NewFailedResponse(NewBadPayloadError("Schema and Query is required")))
 		return
 	}
 
