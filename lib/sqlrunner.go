@@ -13,6 +13,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	lru "github.com/hashicorp/golang-lru/v2"
@@ -278,6 +279,26 @@ func initialize(schema string) (filename string, err error) {
 	return schemaFilename, nil
 }
 
+// SQLiteTimestampFormats is timestamp formats understood by both this module
+// and SQLite.  The first format in the slice will be used when saving time
+// values into the database. When parsing a string from a timestamp or datetime
+// column, the formats are tried in order.
+//
+// Reference: https://github.com/mattn/go-sqlite3/blob/348128fdcf102af8b9f51fb26ae41c4d7438f1ca/sqlite3.go#L224C1-L240C2
+var SQLiteTimestampFormats = []string{
+	// By default, store timestamps with whatever timezone they come with.
+	// When parsed, they will be returned with the same timezone.
+	"2006-01-02 15:04:05.999999999-07:00",
+	"2006-01-02T15:04:05.999999999-07:00",
+	"2006-01-02 15:04:05.999999999",
+	"2006-01-02T15:04:05.999999999",
+	"2006-01-02 15:04:05",
+	"2006-01-02T15:04:05",
+	"2006-01-02 15:04",
+	"2006-01-02T15:04",
+	"2006-01-02",
+}
+
 func parseSqliteDate(d any) (*time.Time, error) {
 	if date, ok := d.(*time.Time); ok {
 		return date, nil
@@ -288,14 +309,20 @@ func parseSqliteDate(d any) (*time.Time, error) {
 		return nil, fmt.Errorf("invalid date type: %T", d)
 	}
 
-	t, err := time.Parse("2006-01-02 15:04:05", dateStr)
-	if err == nil {
-		return &t, nil
-	}
+	var t time.Time       // the parsed time value
+	var timeVal time.Time // temp variable to store the parsed time value
+	var err error
 
-	t, err = time.Parse("2006-01-02", dateStr)
-	if err == nil {
-		return &t, nil
+	s := strings.TrimSuffix(dateStr, "Z")
+	for _, format := range SQLiteTimestampFormats {
+		if timeVal, err = time.ParseInLocation(format, s, time.UTC); err == nil {
+			t = timeVal
+			break
+		}
+	}
+	if err != nil {
+		// The column is a time value, so return the zero time on parse failure.
+		t = time.Time{}
 	}
 
 	return &t, nil
