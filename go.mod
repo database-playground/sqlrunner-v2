@@ -2,12 +2,12 @@ module github.com/database-playground/sqlrunner
 
 go 1.23.3
 
-require modernc.org/sqlite v1.34.4
+require modernc.org/sqlite v1.38.1
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	golang.org/x/exp v0.0.0-20241217172543-b2144cdd0a67 // indirect
+	golang.org/x/exp v0.0.0-20250718183923-645b1fa84792 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
@@ -19,12 +19,12 @@ require (
 	github.com/ncruces/go-strftime v0.1.9 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/stretchr/testify v1.10.0
-	golang.org/x/sync v0.10.0
-	golang.org/x/sys v0.28.0 // indirect
-	modernc.org/gc/v3 v3.0.0-20241223112719-96e2e1e4408d // indirect
-	modernc.org/libc v1.61.6 // indirect
+	golang.org/x/sync v0.16.0
+	golang.org/x/sys v0.34.0 // indirect
+	modernc.org/gc/v3 v3.1.0 // indirect
+	modernc.org/libc v1.66.4 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
-	modernc.org/memory v1.8.0 // indirect
+	modernc.org/memory v1.11.0 // indirect
 	modernc.org/strutil v1.2.1 // indirect
 	modernc.org/token v1.1.0 // indirect
 )
