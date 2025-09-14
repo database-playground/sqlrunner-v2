@@ -1,4 +1,5 @@
-FROM docker.io/library/golang:1-alpine AS builder
+FROM docker.io/library/golang:1.25-alpine AS builder
+
 RUN mkdir /src
 WORKDIR /src
 
@@ -8,6 +9,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 COPY . /src/
 
 ENV CGO_ENABLED=0
+ENV GOEXPERIMENT=greenteagc
 RUN --mount=type=cache,target=/go/pkg/mod \
     go build -ldflags="-s -w" -trimpath -o ./bin/server
 
