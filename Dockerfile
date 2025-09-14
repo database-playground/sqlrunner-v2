@@ -8,8 +8,8 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     go mod download
 COPY . /src/
 
-ENV CGO_ENABLED=0
-ENV GOEXPERIMENT=greenteagc
+ENV CGO_ENABLED=0 GOEXPERIMENT="greenteagc,jsonv2"
+
 RUN --mount=type=cache,target=/go/pkg/mod \
     go build -ldflags="-s -w" -trimpath -o ./bin/server
 
