@@ -23,9 +23,6 @@ jobs:
       - name: Install dependencies
         run: go mod download
 
-      - name: Generate GraphQL code
-        run: go generate .
-
       - name: Lint with golangci-lint
         uses: golangci/golangci-lint-action@v8
         with:
