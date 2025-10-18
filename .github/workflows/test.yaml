@@ -1,21 +1,27 @@
-name: Go test
+name: Go Tests
 
 on:
   push:
-  workflow_dispatch:
-
-permissions:
-  contents: read
+    branches: [main]
+  pull_request:
+    branches: [main]
 
 jobs:
   test:
+    name: Run Tests
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
-      - uses: DeterminateSystems/flake-checker-action@main
-      - uses: DeterminateSystems/determinate-nix-action@main
-      - uses: DeterminateSystems/flakehub-cache-action@main
+      - uses: actions/checkout@v5
 
-      - name: Run go test
-        run: nix develop --command go test ./...
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: "go.mod"
+          cache: true
+
+      - name: Install dependencies
+        run: go mod download
+
+      - name: Run tests
+        run: go test ./...
