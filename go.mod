@@ -22,7 +22,7 @@ require (
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
-	github.com/stretchr/testify v1.10.0
+	github.com/stretchr/testify v1.11.1
 	golang.org/x/sync v0.18.0
 	golang.org/x/sys v0.38.0 // indirect
 	modernc.org/libc v1.67.1 // indirect
