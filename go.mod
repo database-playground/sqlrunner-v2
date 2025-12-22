@@ -2,7 +2,7 @@ module github.com/database-playground/sqlrunner
 
 go 1.25
 
-require modernc.org/sqlite v1.40.1
+require modernc.org/sqlite v1.41.0
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
