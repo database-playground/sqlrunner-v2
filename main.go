@@ -53,7 +53,7 @@ func main() {
 	r.Use(p.Instrument())
 	r.Use(otelgin.Middleware("sqlrunner"))
 
-	p.AddCustomHistogram("query_requests_total", "The total number of SQL query requests.", []string{"code"})
+	p.AddCustomCounter("query_requests_total", "The total number of SQL query requests.", []string{"code"})
 	p.AddCustomHistogram("query_requests_duration_seconds", "The duration of each SQL query request.", []string{"code"})
 
 	srv := &http.Server{
