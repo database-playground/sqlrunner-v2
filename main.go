@@ -46,6 +46,8 @@ func main() {
 	r.Use(p.Instrument())
 	r.Use(otelgin.Middleware("sqlrunner"))
 
+	p.AddCustomHistogram("query_duration_seconds", "The duration of the SQL query request.", []string{"code"})
+
 	srv := &http.Server{
 		Addr:    addr,
 		Handler: r,
@@ -55,7 +57,10 @@ func main() {
 		c.String(http.StatusOK, "OK")
 	})
 
-	service := &SqlQueryService{}
+	service := &SqlQueryService{
+		p:       p,
+		sfgroup: singleflight.Group{},
+	}
 	r.POST("/query", service.Serve)
 
 	go func() {
@@ -73,10 +78,13 @@ func main() {
 }
 
 type SqlQueryService struct {
+	p       *ginprom.Prometheus
 	sfgroup singleflight.Group
 }
 
 func (s *SqlQueryService) Serve(c *gin.Context) {
+	now := time.Now()
+
 	ctx, span := tracer.Start(c.Request.Context(), "SqlQueryService.Serve")
 	defer span.End()
 
@@ -85,6 +93,7 @@ func (s *SqlQueryService) Serve(c *gin.Context) {
 		span.SetStatus(codes.Error, "bad payload")
 		span.RecordError(err)
 
+		s.p.AddCustomHistogramValue("query_duration_seconds", []string{"422"}, time.Since(now).Seconds())
 		c.JSON(http.StatusUnprocessableEntity, NewFailedResponse(BadPayloadError{Parent: err}))
 		return
 	}
@@ -93,6 +102,7 @@ func (s *SqlQueryService) Serve(c *gin.Context) {
 		span.SetStatus(codes.Error, "bad payload")
 		span.RecordError(errors.New("schema and query are required"))
 
+		s.p.AddCustomHistogramValue("query_duration_seconds", []string{"422"}, time.Since(now).Seconds())
 		c.JSON(http.StatusUnprocessableEntity, NewFailedResponse(NewBadPayloadError("Schema and Query is required")))
 		return
 	}
@@ -100,6 +110,7 @@ func (s *SqlQueryService) Serve(c *gin.Context) {
 	span.AddEvent("runner.find")
 	runner, err := s.findRunner(req.Schema)
 	if err != nil {
+		s.p.AddCustomHistogramValue("query_duration_seconds", []string{"500"}, time.Since(now).Seconds())
 		c.JSON(http.StatusInternalServerError, NewFailedResponse(err))
 		return
 	}
@@ -110,10 +121,12 @@ func (s *SqlQueryService) Serve(c *gin.Context) {
 	span.AddEvent("runner.query")
 	result, err := runner.Query(queryCtx, req.Query)
 	if err != nil {
+		s.p.AddCustomHistogramValue("query_duration_seconds", []string{"400"}, time.Since(now).Seconds())
 		c.JSON(http.StatusBadRequest, NewFailedResponse(err))
 		return
 	}
 
+	s.p.AddCustomHistogramValue("query_duration_seconds", []string{"200"}, time.Since(now).Seconds())
 	c.JSON(http.StatusOK, NewSuccessResponse(result))
 }
 
