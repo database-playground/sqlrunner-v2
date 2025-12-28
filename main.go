@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -71,6 +72,7 @@ func main() {
 	r.POST("/query", service.Serve)
 
 	go func() {
+		slog.Info("Starting server", slog.String("address", addr))
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			slog.Error("ListenAndServe failed", slog.Any("error", err))
 			panic(err)
@@ -93,18 +95,17 @@ type SqlQueryService struct {
 }
 
 func (s *SqlQueryService) Serve(c *gin.Context) {
-	now := time.Now()
-
 	ctx, span := tracer.Start(c.Request.Context(), "SqlQueryService.Serve")
 	defer span.End()
+
+	recordMetrics := s.createRecordMetricsFunc()
 
 	var req QueryRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		span.SetStatus(codes.Error, "bad payload")
 		span.RecordError(err)
 
-		s.p.IncrementCounterValue("query_requests_total", []string{"422"})
-		s.p.AddCustomHistogramValue("query_requests_duration_seconds", []string{"422"}, time.Since(now).Seconds())
+		recordMetrics(http.StatusUnprocessableEntity)
 		c.JSON(http.StatusUnprocessableEntity, NewFailedResponse(BadPayloadError{Parent: err}))
 		return
 	}
@@ -113,9 +114,8 @@ func (s *SqlQueryService) Serve(c *gin.Context) {
 		span.SetStatus(codes.Error, "bad payload")
 		span.RecordError(errors.New("schema and query are required"))
 
-		s.p.IncrementCounterValue("query_requests_total", []string{"422"})
-		s.p.AddCustomHistogramValue("query_requests_duration_seconds", []string{"422"}, time.Since(now).Seconds())
-		c.JSON(http.StatusUnprocessableEntity, NewFailedResponse(NewBadPayloadError("Schema and Query are required")))
+		recordMetrics(http.StatusUnprocessableEntity)
+		c.JSON(http.StatusUnprocessableEntity, NewFailedResponse(NewBadPayloadError("schema and query are required")))
 		return
 	}
 
@@ -125,8 +125,7 @@ func (s *SqlQueryService) Serve(c *gin.Context) {
 		span.SetStatus(codes.Error, "runner find error")
 		span.RecordError(err)
 
-		s.p.IncrementCounterValue("query_requests_total", []string{"500"})
-		s.p.AddCustomHistogramValue("query_requests_duration_seconds", []string{"500"}, time.Since(now).Seconds())
+		recordMetrics(http.StatusInternalServerError)
 		c.JSON(http.StatusInternalServerError, NewFailedResponse(err))
 		return
 	}
@@ -140,17 +139,24 @@ func (s *SqlQueryService) Serve(c *gin.Context) {
 		span.SetStatus(codes.Error, "query error")
 		span.RecordError(err)
 
-		s.p.IncrementCounterValue("query_requests_total", []string{"400"})
-		s.p.AddCustomHistogramValue("query_requests_duration_seconds", []string{"400"}, time.Since(now).Seconds())
+		recordMetrics(http.StatusBadRequest)
 		c.JSON(http.StatusBadRequest, NewFailedResponse(err))
 		return
 	}
 
-	s.p.IncrementCounterValue("query_requests_total", []string{"200"})
-	s.p.AddCustomHistogramValue("query_requests_duration_seconds", []string{"200"}, time.Since(now).Seconds())
+	recordMetrics(http.StatusOK)
 	span.SetStatus(codes.Ok, "success")
 
 	c.JSON(http.StatusOK, NewSuccessResponse(result))
+}
+
+func (s *SqlQueryService) createRecordMetricsFunc() func(code int) {
+	now := time.Now()
+
+	return func(code int) {
+		s.p.IncrementCounterValue("query_requests_total", []string{strconv.Itoa(code)})
+		s.p.AddCustomHistogramValue("query_requests_duration_seconds", []string{strconv.Itoa(code)}, time.Since(now).Seconds())
+	}
 }
 
 func (s *SqlQueryService) findRunner(schema string) (*sqlrunner.SQLRunner, error) {
