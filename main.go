@@ -8,6 +8,8 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	sqlrunner "github.com/database-playground/sqlrunner/lib"
@@ -40,10 +42,33 @@ func init() {
 }
 
 func main() {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
+	defer stop()
+
 	addr := ":8080"
 	if os.Getenv("PORT") != "" {
 		addr = ":" + os.Getenv("PORT")
 	}
+
+	srv := &http.Server{
+		Addr:    ":8080",
+		Handler: nil,
+	}
+
+	go func() {
+		<-ctx.Done()
+		slog.Info("Received signal to shutdown")
+		if err := srv.Shutdown(context.Background()); err != nil {
+			slog.Error("Shutdown failed", slog.Any("error", err))
+		}
+	}()
+
+	shutdown, err := setupOTelSDK(ctx)
+	if err != nil {
+		slog.Error("Failed to setup OpenTelemetry", slog.Any("error", err))
+		os.Exit(1)
+	}
+	defer shutdown(context.Background())
 
 	service := &SqlQueryService{}
 	http.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -65,9 +90,13 @@ func main() {
 	http.Handle("GET /metrics", promhttp.Handler())
 
 	slog.Info("Listening", slog.String("addr", addr))
-	if err := http.ListenAndServe(addr, nil); err != nil {
-		slog.Error("ListenAndServe failed", slog.Any("error", err))
-		os.Exit(1)
+	if err := srv.ListenAndServe(); err != nil {
+		if errors.Is(err, http.ErrServerClosed) {
+			slog.Info("Server closed")
+		} else {
+			slog.Error("ListenAndServe failed", slog.Any("error", err))
+			os.Exit(1)
+		}
 	}
 }
 
