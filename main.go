@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -12,34 +11,16 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Depado/ginprom"
 	sqlrunner "github.com/database-playground/sqlrunner/lib"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/gin-gonic/gin"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
 	"golang.org/x/sync/singleflight"
 )
 
-var totalQueryCounter = prometheus.NewCounterVec(
-	prometheus.CounterOpts{
-		Name: "query_requests_total",
-		Help: "The total number of SQL query requests.",
-	},
-	[]string{"code", "method"},
-)
-
-var queryDuration = prometheus.NewHistogramVec(
-	prometheus.HistogramOpts{
-		Name: "query_duration_seconds",
-		Help: "The duration of the SQL query request.",
-	},
-	[]string{"code", "method"},
-)
-
-func init() {
-	prometheus.MustRegister(
-		totalQueryCounter,
-		queryDuration,
-	)
-}
+var tracer = otel.Tracer("sqlrunner")
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
@@ -50,19 +31,6 @@ func main() {
 		addr = ":" + os.Getenv("PORT")
 	}
 
-	srv := &http.Server{
-		Addr:    ":8080",
-		Handler: nil,
-	}
-
-	go func() {
-		<-ctx.Done()
-		slog.Info("Received signal to shutdown")
-		if err := srv.Shutdown(context.Background()); err != nil {
-			slog.Error("Shutdown failed", slog.Any("error", err))
-		}
-	}()
-
 	shutdown, err := setupOTelSDK(ctx)
 	if err != nil {
 		slog.Error("Failed to setup OpenTelemetry", slog.Any("error", err))
@@ -70,33 +38,37 @@ func main() {
 	}
 	defer shutdown(context.Background())
 
-	service := &SqlQueryService{}
-	http.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("OK"))
+	r := gin.Default()
+	p := ginprom.New(
+		ginprom.Engine(r),
+		ginprom.Path("/metrics"),
+	)
+	r.Use(p.Instrument())
+	r.Use(otelgin.Middleware("sqlrunner"))
+
+	srv := &http.Server{
+		Addr:    addr,
+		Handler: r,
+	}
+
+	r.GET("/healthz", func(c *gin.Context) {
+		c.String(http.StatusOK, "OK")
 	})
 
-	http.Handle(
-		"POST /query",
-		promhttp.InstrumentHandlerCounter(
-			totalQueryCounter,
-			promhttp.InstrumentHandlerDuration(
-				queryDuration,
-				service,
-			),
-		),
-	)
+	service := &SqlQueryService{}
+	r.POST("/query", service.Serve)
 
-	http.Handle("GET /metrics", promhttp.Handler())
-
-	slog.Info("Listening", slog.String("addr", addr))
-	if err := srv.ListenAndServe(); err != nil {
-		if errors.Is(err, http.ErrServerClosed) {
-			slog.Info("Server closed")
-		} else {
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			slog.Error("ListenAndServe failed", slog.Any("error", err))
-			os.Exit(1)
+			panic(err)
 		}
+	}()
+
+	<-ctx.Done()
+	slog.Info("Received signal to shutdown")
+	if err := srv.Shutdown(context.Background()); err != nil {
+		slog.Error("Shutdown failed", slog.Any("error", err))
 	}
 }
 
@@ -104,35 +76,45 @@ type SqlQueryService struct {
 	sfgroup singleflight.Group
 }
 
-func (s *SqlQueryService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	decoder := json.NewDecoder(r.Body)
+func (s *SqlQueryService) Serve(c *gin.Context) {
+	ctx, span := tracer.Start(c.Request.Context(), "SqlQueryService.Serve")
+	defer span.End()
+
 	var req QueryRequest
-	if err := decoder.Decode(&req); err != nil {
-		respond(w, http.StatusUnprocessableEntity, NewFailedResponse(BadPayloadError{Parent: err}))
+	if err := c.ShouldBindJSON(&req); err != nil {
+		span.SetStatus(codes.Error, "bad payload")
+		span.RecordError(err)
+
+		c.JSON(http.StatusUnprocessableEntity, NewFailedResponse(BadPayloadError{Parent: err}))
 		return
 	}
 
 	if req.Schema == "" || req.Query == "" {
-		respond(w, http.StatusUnprocessableEntity, NewFailedResponse(NewBadPayloadError("Schema and Query is required")))
+		span.SetStatus(codes.Error, "bad payload")
+		span.RecordError(errors.New("schema and query are required"))
+
+		c.JSON(http.StatusUnprocessableEntity, NewFailedResponse(NewBadPayloadError("Schema and Query is required")))
 		return
 	}
 
+	span.AddEvent("runner.find")
 	runner, err := s.findRunner(req.Schema)
 	if err != nil {
-		respond(w, http.StatusInternalServerError, NewFailedResponse(err))
+		c.JSON(http.StatusInternalServerError, NewFailedResponse(err))
 		return
 	}
 
-	queryCtx, cancel := context.WithTimeout(r.Context(), time.Minute)
+	queryCtx, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 
+	span.AddEvent("runner.query")
 	result, err := runner.Query(queryCtx, req.Query)
 	if err != nil {
-		respond(w, http.StatusBadRequest, NewFailedResponse(err))
+		c.JSON(http.StatusBadRequest, NewFailedResponse(err))
 		return
 	}
 
-	respond(w, http.StatusOK, NewSuccessResponse(result))
+	c.JSON(http.StatusOK, NewSuccessResponse(result))
 }
 
 func (s *SqlQueryService) findRunner(schema string) (*sqlrunner.SQLRunner, error) {
@@ -211,10 +193,4 @@ func NewBadPayloadError(message string) BadPayloadError {
 
 func (e BadPayloadError) Error() string {
 	return "bad payload: " + e.Parent.Error()
-}
-
-func respond(w http.ResponseWriter, status int, data any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(data)
 }

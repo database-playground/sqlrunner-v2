@@ -147,11 +147,17 @@ func NewSQLRunner(schema string) (*SQLRunner, error) {
 
 // Query executes a query and returns the result.
 func (r *SQLRunner) Query(ctx context.Context, query string) (*QueryResult, error) {
+	_, span := tracer.Start(ctx, "SQLRunner.Query")
+	defer span.End()
+
+	span.AddEvent("cache.get")
 	// Check the cache first
 	if result, ok := r.cache.Get(query); ok {
+		span.AddEvent("cache.hit")
 		return result, nil
 	}
 
+	span.AddEvent("sqlite.open")
 	db, err := r.getSqliteInstance()
 	if err != nil {
 		return nil, fmt.Errorf("get schema: %w", err)
@@ -162,6 +168,7 @@ func (r *SQLRunner) Query(ctx context.Context, query string) (*QueryResult, erro
 		}
 	}()
 
+	span.AddEvent("sqlite.query")
 	result, err := db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, NewQueryError(err)
@@ -172,6 +179,7 @@ func (r *SQLRunner) Query(ctx context.Context, query string) (*QueryResult, erro
 		}
 	}()
 
+	span.AddEvent("construct_result")
 	cols, err := result.Columns()
 	if err != nil {
 		return nil, fmt.Errorf("get columns: %w", err)
