@@ -52,7 +52,8 @@ func main() {
 	r.Use(p.Instrument())
 	r.Use(otelgin.Middleware("sqlrunner"))
 
-	p.AddCustomHistogram("query_duration_seconds", "The duration of the SQL query request.", []string{"code"})
+	p.AddCustomHistogram("query_requests_total", "The total number of SQL query requests.", []string{"code"})
+	p.AddCustomHistogram("query_requests_duration_seconds", "The duration of each SQL query request.", []string{"code"})
 
 	srv := &http.Server{
 		Addr:    addr,
@@ -102,7 +103,8 @@ func (s *SqlQueryService) Serve(c *gin.Context) {
 		span.SetStatus(codes.Error, "bad payload")
 		span.RecordError(err)
 
-		s.p.AddCustomHistogramValue("query_duration_seconds", []string{"422"}, time.Since(now).Seconds())
+		s.p.IncrementCounterValue("query_requests_total", []string{"422"})
+		s.p.AddCustomHistogramValue("query_requests_duration_seconds", []string{"422"}, time.Since(now).Seconds())
 		c.JSON(http.StatusUnprocessableEntity, NewFailedResponse(BadPayloadError{Parent: err}))
 		return
 	}
@@ -111,7 +113,8 @@ func (s *SqlQueryService) Serve(c *gin.Context) {
 		span.SetStatus(codes.Error, "bad payload")
 		span.RecordError(errors.New("schema and query are required"))
 
-		s.p.AddCustomHistogramValue("query_duration_seconds", []string{"422"}, time.Since(now).Seconds())
+		s.p.IncrementCounterValue("query_requests_total", []string{"422"})
+		s.p.AddCustomHistogramValue("query_requests_duration_seconds", []string{"422"}, time.Since(now).Seconds())
 		c.JSON(http.StatusUnprocessableEntity, NewFailedResponse(NewBadPayloadError("Schema and Query are required")))
 		return
 	}
@@ -122,7 +125,8 @@ func (s *SqlQueryService) Serve(c *gin.Context) {
 		span.SetStatus(codes.Error, "runner find error")
 		span.RecordError(err)
 
-		s.p.AddCustomHistogramValue("query_duration_seconds", []string{"500"}, time.Since(now).Seconds())
+		s.p.IncrementCounterValue("query_requests_total", []string{"500"})
+		s.p.AddCustomHistogramValue("query_requests_duration_seconds", []string{"500"}, time.Since(now).Seconds())
 		c.JSON(http.StatusInternalServerError, NewFailedResponse(err))
 		return
 	}
@@ -136,13 +140,16 @@ func (s *SqlQueryService) Serve(c *gin.Context) {
 		span.SetStatus(codes.Error, "query error")
 		span.RecordError(err)
 
-		s.p.AddCustomHistogramValue("query_duration_seconds", []string{"400"}, time.Since(now).Seconds())
+		s.p.IncrementCounterValue("query_requests_total", []string{"400"})
+		s.p.AddCustomHistogramValue("query_requests_duration_seconds", []string{"400"}, time.Since(now).Seconds())
 		c.JSON(http.StatusBadRequest, NewFailedResponse(err))
 		return
 	}
 
+	s.p.IncrementCounterValue("query_requests_total", []string{"200"})
+	s.p.AddCustomHistogramValue("query_requests_duration_seconds", []string{"200"}, time.Since(now).Seconds())
 	span.SetStatus(codes.Ok, "success")
-	s.p.AddCustomHistogramValue("query_duration_seconds", []string{"200"}, time.Since(now).Seconds())
+
 	c.JSON(http.StatusOK, NewSuccessResponse(result))
 }
 
