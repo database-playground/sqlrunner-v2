@@ -11,8 +11,33 @@ import (
 	"time"
 
 	sqlrunner "github.com/database-playground/sqlrunner/lib"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"golang.org/x/sync/singleflight"
 )
+
+var totalQueryCounter = prometheus.NewCounterVec(
+	prometheus.CounterOpts{
+		Name: "query_requests_total",
+		Help: "The total number of SQL query requests.",
+	},
+	[]string{"code", "method"},
+)
+
+var queryDuration = prometheus.NewHistogramVec(
+	prometheus.HistogramOpts{
+		Name: "query_duration_seconds",
+		Help: "The duration of the SQL query request.",
+	},
+	[]string{"code", "method"},
+)
+
+func init() {
+	prometheus.MustRegister(
+		totalQueryCounter,
+		queryDuration,
+	)
+}
 
 func main() {
 	addr := ":8080"
@@ -26,7 +51,18 @@ func main() {
 		_, _ = w.Write([]byte("OK"))
 	})
 
-	http.Handle("POST /query", service)
+	http.Handle(
+		"POST /query",
+		promhttp.InstrumentHandlerCounter(
+			totalQueryCounter,
+			promhttp.InstrumentHandlerDuration(
+				queryDuration,
+				service,
+			),
+		),
+	)
+
+	http.Handle("GET /metrics", promhttp.Handler())
 
 	slog.Info("Listening", slog.String("addr", addr))
 	if err := http.ListenAndServe(addr, nil); err != nil {
