@@ -18,6 +18,7 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/singleflight"
 )
 
@@ -52,6 +53,13 @@ func main() {
 	)
 	r.Use(p.Instrument())
 	r.Use(otelgin.Middleware("sqlrunner"))
+
+	// Add a middleware to add the trace ID to the response header
+	r.Use(func(c *gin.Context) {
+		traceID := trace.SpanContextFromContext(c.Request.Context()).TraceID().String()
+		c.Header("X-Trace-ID", traceID)
+		c.Next()
+	})
 
 	p.AddCustomCounter("query_requests_total", "The total number of SQL query requests.", []string{"code"})
 	p.AddCustomHistogram("query_requests_duration_seconds", "The duration of each SQL query request.", []string{"code"})
