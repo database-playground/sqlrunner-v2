@@ -15,6 +15,7 @@ import (
 	"github.com/Depado/ginprom"
 	sqlrunner "github.com/database-playground/sqlrunner/lib"
 	"github.com/gin-gonic/gin"
+	sloggin "github.com/samber/slog-gin"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/codes"
@@ -51,8 +52,17 @@ func main() {
 		ginprom.Engine(r),
 		ginprom.Path("/metrics"),
 	)
+	r.Use(gin.Recovery())
+	r.Use(gin.ErrorLogger())
 	r.Use(p.Instrument())
 	r.Use(otelgin.Middleware("sqlrunner"))
+
+	config := sloggin.Config{
+		WithSpanID:    true,
+		WithTraceID:   true,
+		WithUserAgent: true,
+	}
+	r.Use(sloggin.NewWithConfig(slog.Default(), config))
 
 	// Add a middleware to add the trace ID to the response header
 	r.Use(func(c *gin.Context) {
