@@ -17,6 +17,7 @@ import (
 	"time"
 
 	lru "github.com/hashicorp/golang-lru/v2"
+	"go.opentelemetry.io/otel/codes"
 	"golang.org/x/sync/singleflight"
 	"modernc.org/sqlite"
 	_ "modernc.org/sqlite"
@@ -153,13 +154,16 @@ func (r *SQLRunner) Query(ctx context.Context, query string) (*QueryResult, erro
 	span.AddEvent("cache.get")
 	// Check the cache first
 	if result, ok := r.cache.Get(query); ok {
-		span.AddEvent("cache.hit")
+		span.SetStatus(codes.Ok, "cache hit")
 		return result, nil
 	}
 
 	span.AddEvent("sqlite.open")
 	db, err := r.getSqliteInstance()
 	if err != nil {
+		span.SetStatus(codes.Error, "get schema error")
+		span.RecordError(err)
+
 		return nil, fmt.Errorf("get schema: %w", err)
 	}
 	defer func() {
@@ -171,6 +175,9 @@ func (r *SQLRunner) Query(ctx context.Context, query string) (*QueryResult, erro
 	span.AddEvent("sqlite.query")
 	result, err := db.QueryContext(ctx, query)
 	if err != nil {
+		span.SetStatus(codes.Error, "query error")
+		span.RecordError(err)
+
 		return nil, NewQueryError(err)
 	}
 	defer func() {
@@ -182,6 +189,9 @@ func (r *SQLRunner) Query(ctx context.Context, query string) (*QueryResult, erro
 	span.AddEvent("construct_result")
 	cols, err := result.Columns()
 	if err != nil {
+		span.SetStatus(codes.Error, "get columns error")
+		span.RecordError(err)
+
 		return nil, fmt.Errorf("get columns: %w", err)
 	}
 
@@ -193,6 +203,9 @@ func (r *SQLRunner) Query(ctx context.Context, query string) (*QueryResult, erro
 		}
 
 		if err := result.Scan(rawCells...); err != nil {
+			span.SetStatus(codes.Error, "scan error")
+			span.RecordError(err)
+
 			return nil, fmt.Errorf("scan: %w", err)
 		}
 
@@ -210,8 +223,10 @@ func (r *SQLRunner) Query(ctx context.Context, query string) (*QueryResult, erro
 	}
 
 	// Add the result to the cache
+	span.AddEvent("cache.set")
 	r.cache.Add(query, queryResult)
 
+	span.SetStatus(codes.Ok, "success")
 	return queryResult, nil
 }
 

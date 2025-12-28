@@ -120,7 +120,7 @@ Here are some useful variables:
   - Supported values: `grpc`, `http/protobuf`
   - Default: falls back to `OTEL_EXPORTER_OTLP_PROTOCOL`
 - `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT`: Specify the default endpoint for OTLP log data.
-  - Example: `http://victorialogs:9428/insert/opentelemetry/v1/traces`
+  - Example: `http://victorialogs:9428/insert/opentelemetry/v1/logs`
 
 ## License
 

@@ -36,7 +36,13 @@ func main() {
 		slog.Error("Failed to setup OpenTelemetry", slog.Any("error", err))
 		os.Exit(1)
 	}
-	defer shutdown(context.Background())
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := shutdown(ctx); err != nil {
+			slog.Error("Failed to shutdown OpenTelemetry", slog.Any("error", err))
+		}
+	}()
 
 	r := gin.Default()
 	p := ginprom.New(
@@ -72,7 +78,10 @@ func main() {
 
 	<-ctx.Done()
 	slog.Info("Received signal to shutdown")
-	if err := srv.Shutdown(context.Background()); err != nil {
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(shutdownCtx); err != nil {
 		slog.Error("Shutdown failed", slog.Any("error", err))
 	}
 }
@@ -103,13 +112,16 @@ func (s *SqlQueryService) Serve(c *gin.Context) {
 		span.RecordError(errors.New("schema and query are required"))
 
 		s.p.AddCustomHistogramValue("query_duration_seconds", []string{"422"}, time.Since(now).Seconds())
-		c.JSON(http.StatusUnprocessableEntity, NewFailedResponse(NewBadPayloadError("Schema and Query is required")))
+		c.JSON(http.StatusUnprocessableEntity, NewFailedResponse(NewBadPayloadError("Schema and Query are required")))
 		return
 	}
 
 	span.AddEvent("runner.find")
 	runner, err := s.findRunner(req.Schema)
 	if err != nil {
+		span.SetStatus(codes.Error, "runner find error")
+		span.RecordError(err)
+
 		s.p.AddCustomHistogramValue("query_duration_seconds", []string{"500"}, time.Since(now).Seconds())
 		c.JSON(http.StatusInternalServerError, NewFailedResponse(err))
 		return
@@ -121,11 +133,15 @@ func (s *SqlQueryService) Serve(c *gin.Context) {
 	span.AddEvent("runner.query")
 	result, err := runner.Query(queryCtx, req.Query)
 	if err != nil {
+		span.SetStatus(codes.Error, "query error")
+		span.RecordError(err)
+
 		s.p.AddCustomHistogramValue("query_duration_seconds", []string{"400"}, time.Since(now).Seconds())
 		c.JSON(http.StatusBadRequest, NewFailedResponse(err))
 		return
 	}
 
+	span.SetStatus(codes.Ok, "success")
 	s.p.AddCustomHistogramValue("query_duration_seconds", []string{"200"}, time.Since(now).Seconds())
 	c.JSON(http.StatusOK, NewSuccessResponse(result))
 }
