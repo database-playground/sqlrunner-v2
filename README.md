@@ -91,6 +91,37 @@ curl --request GET \
 OK
 ```
 
+## Observability
+
+SQL Runner exports its metrics at the API endpoint `/metrics`.
+
+It supports configuring OpenTelemetry (tracing and logging) using the following environment variables: <https://opentelemetry.io/docs/languages/sdk-configuration/general/>
+
+Here are some useful variables:
+
+- `OTEL_SERVICE_NAME`: Specify the name of this service (e.g., `sqlrunner-replica-1`).
+- `OTEL_TRACES_EXPORTER`: Specify where the traces should be exported.
+  - Supported values: `console`, `otlp`
+  - Default: `console`
+- `OTEL_LOGS_EXPORTER`: Specify where the logs should be exported.
+  - Supported values: `console`, `otlp`
+  - Default: `console`
+- `OTEL_EXPORTER_OTLP_PROTOCOL`: Specify the default protocol for OTLP.
+  - Supported values: `grpc`, `http/protobuf`
+  - Default: `grpc`
+- `OTEL_EXPORTER_OTLP_ENDPOINT`: Specify the default endpoint for OTLP.
+  - Example: `http://otlp-collector:4317`
+- `OTEL_EXPORTER_OTLP_TRACES_PROTOCOL`: Specify the default protocol for OTLP trace data.
+  - Supported values: `grpc`, `http/protobuf`
+  - Default: falls back to `OTEL_EXPORTER_OTLP_PROTOCOL`
+- `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`: Specify the default endpoint for OTLP trace data.
+  - Example: `http://victoriatraces:10428/insert/opentelemetry/v1/traces`
+- `OTEL_EXPORTER_OTLP_LOGS_PROTOCOL`: Specify the default protocol for OTLP log data.
+  - Supported values: `grpc`, `http/protobuf`
+  - Default: falls back to `OTEL_EXPORTER_OTLP_PROTOCOL`
+- `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT`: Specify the default endpoint for OTLP log data.
+  - Example: `http://victorialogs:9428/insert/opentelemetry/v1/logs`
+
 ## License
 
 Apache-2.0. See [LICENSE](LICENSE) for details.
