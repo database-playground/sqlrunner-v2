@@ -19,7 +19,7 @@ require (
 	go.opentelemetry.io/otel/sdk v1.39.0
 	go.opentelemetry.io/otel/sdk/log v0.15.0
 	go.opentelemetry.io/otel/trace v1.39.0
-	modernc.org/sqlite v1.42.2
+	modernc.org/sqlite v1.44.3
 )
 
 require (
@@ -88,7 +88,7 @@ require (
 	github.com/stretchr/testify v1.11.1
 	golang.org/x/sync v0.19.0
 	golang.org/x/sys v0.39.0 // indirect
-	modernc.org/libc v1.67.2 // indirect
+	modernc.org/libc v1.67.6 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
 )
