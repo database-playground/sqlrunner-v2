@@ -5,7 +5,7 @@ go 1.25
 require (
 	github.com/Depado/ginprom v1.8.2
 	github.com/gin-gonic/gin v1.11.0
-	github.com/samber/slog-gin v1.18.0
+	github.com/samber/slog-gin v1.20.0
 	go.opentelemetry.io/contrib/bridges/otelslog v0.14.0
 	go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin v0.64.0
 	go.opentelemetry.io/otel v1.39.0
